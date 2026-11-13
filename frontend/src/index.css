@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes pact-network-drift {
+  from {
+    transform: translate3d(-1.25%, -0.5%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(1.25%, 0.5%, 0) scale(1.025);
+  }
+}
+
+@keyframes pact-node-pulse {
+  0%, 100% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 2px #34d399);
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 7px #34d399);
+  }
+}
+
+@keyframes pact-badge-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pact-orb-breathe {
+  from {
+    opacity: 0.65;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.pact-network-drift {
+  animation: pact-network-drift 24s ease-in-out infinite alternate;
+}
+
+.pact-network-node {
+  animation: pact-node-pulse 3.8s ease-in-out infinite;
+}
+
+.pact-float-badge {
+  animation: pact-badge-float 6s ease-in-out infinite;
+}
+
+.pact-ambient-orb {
+  animation: pact-orb-breathe 12s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pact-network-drift,
+  .pact-network-node,
+  .pact-float-badge,
+  .pact-ambient-orb,
+  .pact-login-card .animate-pulse,
+  .pact-login-card .animate-ping {
+    animation: none !important;
+  }
+}
