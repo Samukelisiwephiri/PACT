@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm --prefix backend ci && npm --prefix frontend ci",
+  "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "functions": {
     "server.js": {

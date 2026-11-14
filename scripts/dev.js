@@ -4,6 +4,7 @@ const { spawn } = require("child_process");
 const root = path.resolve(__dirname, "..");
 const frontend = path.join(root, "frontend");
 const backend = path.join(root, "backend");
+const viteScript = require.resolve("vite/bin/vite.js", { paths: [frontend] });
 const children = [];
 let stopping = false;
 
@@ -37,7 +38,7 @@ function start(name, script, cwd, env = {}) {
 
 start(
   "Frontend",
-  path.join(frontend, "node_modules", "vite", "bin", "vite.js"),
+  viteScript,
   frontend
 );
 start(

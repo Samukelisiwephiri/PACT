@@ -14,10 +14,9 @@ pact_stokvel_app/
 
 ## Quick Start (VS Code)
 1. Open this directory in **VS Code**.
-2. Install both packages:
+2. Install the frontend and backend workspace dependencies:
    ```bash
-   npm --prefix backend install
-   npm --prefix frontend install
+   npm install
    ```
 3. Copy `backend/.env.example` to `backend/.env`, then start the whole app from this directory:
    ```bash
@@ -55,7 +54,7 @@ sessions are not durable across function instances.
 ## Deploy to Vercel
 
 Import the repository into Vercel and set **Root Directory** to `PACT-main`. The
-included `vercel.json` installs both packages, builds the Vite frontend, and includes
+included `vercel.json` installs both workspaces, builds the Vite frontend, and includes
 the built frontend in the Express function, so the website and `/api` endpoints deploy
 under the same origin. Vercel detects the root `server.js` entry point automatically.
 
