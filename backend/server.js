@@ -69,13 +69,12 @@ app.post("/api/hardware/deposit", async (req, res) => {
 
 const path = require('path');
 
-// 1. Tell Express to look inside the frontend's 'dist' folder and serve those static files
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-// 2. Catch-all route: If a user navigates to any URL path, send back the main index.html file
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
+if (process.env.VERCEL !== "1") {
+  app.use(express.static(path.join(__dirname, "../frontend/dist")));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
+  });
+}
 
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);

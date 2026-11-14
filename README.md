@@ -53,16 +53,21 @@ sessions are not durable across function instances.
 
 ## Deploy to Vercel
 
-Import the repository into Vercel and set **Root Directory** to `PACT-main`. The
-included `vercel.json` installs both workspaces, builds the Vite frontend, and includes
-the built frontend in the Express function, so the website and `/api` endpoints deploy
-under the same origin. Vercel detects the root `server.js` entry point automatically.
+Import the repository into Vercel and set **Root Directory** to the directory
+containing this `package.json` and `vercel.json` (use `.` if these files are at
+the repository root). The included `vercel.json` installs both workspaces and
+builds the Vite frontend into `frontend/dist`. Vercel serves that directory as
+the website, while `api/[...path].js` sends `/api/*` requests to the existing
+Express backend. The frontend and API therefore share the same origin, and the
+frontend does not need `VITE_API_URL` set.
 
-Set `FRONTEND_URL` to your public HTTPS app origin if you use a custom domain. If it is
-unset, the app uses Vercel's `VERCEL_URL`. For Google sign-in, set `GOOGLE_CLIENT_ID`
-and the build-time `VITE_GOOGLE_CLIENT_ID`. Add PayFast credentials and set
-`PAYFAST_NOTIFY_BASE_URL` to the same public origin if you enable payments. Never
-commit these values or private keys.
+In Vercel **Project Settings > Environment Variables**, set `FRONTEND_URL` to
+your public HTTPS app origin (for example, your production `*.vercel.app` URL
+or custom domain). If unset, the app uses Vercel's deployment URL. For Google
+sign-in, set both `GOOGLE_CLIENT_ID` and the build-time `VITE_GOOGLE_CLIENT_ID`.
+For PayFast, set the merchant credentials and `PAYFAST_NOTIFY_BASE_URL` to the
+same public HTTPS origin. Never commit these values or private keys. After
+adding or changing build-time variables, redeploy so Vite can include them.
 
 **Important:** signup, sessions, and payment orders currently use local JSON files
 and in-memory sessions. Vercel functions do not provide durable writable storage or
