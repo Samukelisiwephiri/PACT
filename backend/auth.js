@@ -140,7 +140,7 @@ router.use((req, res, next) => {
   next();
 });
 
-router.get("/me", async (req, res, next) => {
+async function requireAuthenticatedUser(req, res, next) {
   try {
     const token = getSessionToken(req);
     const session = sessions.get(token);
@@ -155,10 +155,15 @@ router.get("/me", async (req, res, next) => {
       clearSessionCookie(res);
       return res.status(401).json({ error: "Not signed in." });
     }
-    res.json({ user: publicUser(user) });
+    req.authUser = publicUser(user);
+    next();
   } catch (error) {
     next(error);
   }
+}
+
+router.get("/me", requireAuthenticatedUser, (req, res) => {
+  res.json({ user: req.authUser });
 });
 
 router.post("/register", async (req, res, next) => {
@@ -286,4 +291,5 @@ router.post("/logout", (req, res) => {
   res.json({ success: true });
 });
 
+router.requireAuthenticatedUser = requireAuthenticatedUser;
 module.exports = router;

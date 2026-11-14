@@ -5,9 +5,18 @@ require("dotenv").config();
 
 const app = express();
 const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+if (process.env.PAYFAST_TRUST_PROXY === "true" || process.env.VERCEL === "1") {
+  app.set("trust proxy", 1);
+}
 app.use(express.json({ limit: "32kb" }));
 app.use(cors({ origin: frontendOrigin, credentials: true }));
-app.use("/api/auth", require("./auth"));
+const authRouter = require("./auth");
+app.use("/api/auth", authRouter);
+app.use(
+  "/api/payments/notify",
+  express.raw({ type: "application/x-www-form-urlencoded", limit: "32kb" })
+);
+app.use("/api/payments", require("./payments"));
 
 // Web3 Connection
 const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || "http://127.0.0.1:8545");
@@ -57,10 +66,6 @@ app.post("/api/hardware/deposit", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`PACT Relay Server active on port ${PORT}`));
-
-
 const path = require('path');
 
 // 1. Tell Express to look inside the frontend's 'dist' folder and serve those static files
@@ -79,3 +84,10 @@ app.use((error, req, res, next) => {
     error: status >= 500 ? "The request could not be completed. Please try again." : error.message
   });
 });
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => console.log(`PACT Relay Server active on port ${PORT}`));
+}
+
+module.exports = app;

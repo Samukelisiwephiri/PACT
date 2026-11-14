@@ -1,11 +1,11 @@
 // Define your base API URL. 
 // It uses environment variables if available, otherwise falls back to localhost.
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
-async function authRequest(path, options = {}) {
+async function apiRequest(path, options = {}) {
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/auth${path}`, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       credentials: 'include',
       headers: {
@@ -29,6 +29,10 @@ async function authRequest(path, options = {}) {
     throw error;
   }
   return data;
+}
+
+function authRequest(path, options = {}) {
+  return apiRequest(`/api/auth${path}`, options);
 }
 
 export async function getCurrentUser() {
@@ -63,6 +67,21 @@ export function loginWithGoogle(credential) {
 
 export function logout() {
   return authRequest('/logout', { method: 'POST' });
+}
+
+export async function getPayFastConfig() {
+  return apiRequest('/api/payments/config');
+}
+
+export async function createPayFastCheckout(details) {
+  return apiRequest('/api/payments/checkout', {
+    method: 'POST',
+    body: JSON.stringify(details),
+  });
+}
+
+export async function getPayFastPayment(reference) {
+  return apiRequest(`/api/payments/${encodeURIComponent(reference)}`);
 }
 
 // Function to fetch all contributions for the ledger

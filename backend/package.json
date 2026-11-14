@@ -4,6 +4,7 @@
   "description": "Backend relay server for PACT Stokvel Web3 & ESP32 Integration",
   "main": "server.js",
   "scripts": {
+    "prestart": "npm --prefix ../frontend run build",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },

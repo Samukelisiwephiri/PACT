@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getCurrentUser, loginWithEmail, loginWithGoogle, logout, registerAccount } from './api';
+import {
+  createPayFastCheckout,
+  getCurrentUser,
+  getPayFastConfig,
+  getPayFastPayment,
+  loginWithEmail,
+  loginWithGoogle,
+  logout,
+  registerAccount
+} from './api';
 import {
   AlertCircle,
   ArrowUpRight,
@@ -61,6 +70,7 @@ const makeHash = (suffix) => `0x${Math.random().toString(16).slice(2, 10)}...${s
 export default function App() {
   const loginCanvasRef = useRef(null);
   const googleButtonRef = useRef(null);
+  const processedPayments = useRef(new Set());
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authUser, setAuthUser] = useState(null);
   const [authMode, setAuthMode] = useState('login');
@@ -70,6 +80,12 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [loginError, setLoginError] = useState('');
+  const [payFastConfig, setPayFastConfig] = useState(null);
+  const [paymentStarting, setPaymentStarting] = useState(false);
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
+  const [paymentMessage, setPaymentMessage] = useState('');
+  const [paymentError, setPaymentError] = useState('');
   const [selectedGroup] = useState('Soweto Green Savings Circle');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [walletConnected, setWalletConnected] = useState(true);
@@ -106,6 +122,20 @@ export default function App() {
       })
       .finally(() => {
         if (active) setAuthChecking(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getPayFastConfig()
+      .then((config) => {
+        if (active) setPayFastConfig(config);
+      })
+      .catch((error) => {
+        if (active) setPaymentError(error.message);
       });
     return () => {
       active = false;
@@ -337,6 +367,122 @@ export default function App() {
       setIsLoggedIn(false);
     } catch (error) {
       showToast(error.message, 'error');
+    }
+  };
+
+  const applyPaymentStatus = (payment) => {
+    setPaymentReference(payment.reference);
+    setPaymentStatus(payment.status);
+    setPaymentError('');
+    if (payment.status !== 'paid') {
+      setPaymentMessage(payment.status === 'cancelled'
+        ? 'Checkout was cancelled. No payment was recorded.'
+        : 'Payment is awaiting confirmation from PayFast. Refresh the status shortly.');
+      return;
+    }
+
+    setPaymentMessage(`${formatRand(Number(payment.amount))} payment confirmed by PayFast.`);
+    if (processedPayments.current.has(payment.reference)) return;
+    processedPayments.current.add(payment.reference);
+    setMembers((previous) => {
+      const currentMember = previous.find((member) =>
+        member.name.toLowerCase() === authUser?.name.toLowerCase()
+      );
+      if (currentMember) {
+        return previous.map((member) => member === currentMember
+          ? {
+            ...member,
+            status: 'Paid',
+            amount: Number(payment.amount),
+            method: 'PayFast',
+            time: 'Just now'
+          }
+          : member
+        );
+      }
+      return [...previous, {
+        id: `payfast-${payment.reference}`,
+        name: authUser?.name || 'PACT member',
+        address: '—',
+        status: 'Paid',
+        amount: Number(payment.amount),
+        method: 'PayFast',
+        time: 'Just now',
+        role: 'Member'
+      }];
+    });
+    setTransactions((previous) => [{
+      reference: payment.reference,
+      hash: payment.reference,
+      type: 'Deposit',
+      member: authUser?.name || 'PACT member',
+      amount: formatRand(Number(payment.amount)),
+      method: 'PayFast hosted checkout',
+      status: 'Gateway verified',
+      block: null
+    }, ...previous]);
+  };
+
+  const checkPaymentStatus = async (reference = paymentReference) => {
+    if (!reference) return;
+    setPaymentError('');
+    try {
+      const result = await getPayFastPayment(reference);
+      applyPaymentStatus(result.payment);
+    } catch (error) {
+      setPaymentError(error.message);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const url = new URL(window.location.href);
+    const result = url.searchParams.get('payment');
+    const reference = url.searchParams.get('reference');
+    if (!result) return;
+    if (result === 'cancelled') {
+      setPaymentReference(reference || '');
+      setPaymentStatus('cancelled');
+      setPaymentMessage('Checkout was cancelled. No payment was recorded.');
+    } else if (result === 'success' && reference) {
+      setPaymentReference(reference);
+      setPaymentStatus('pending');
+      setPaymentMessage('Checking your payment with PayFast...');
+      checkPaymentStatus(reference);
+    }
+    url.searchParams.delete('payment');
+    url.searchParams.delete('reference');
+    window.history.replaceState({}, '', url);
+  }, [isLoggedIn]);
+
+  const handlePayContribution = async () => {
+    setPaymentStarting(true);
+    setPaymentError('');
+    try {
+      const checkout = await createPayFastCheckout({ groupName: selectedGroup });
+      const checkoutUrl = new URL(checkout.checkoutUrl);
+      if (
+        checkoutUrl.protocol !== 'https:' ||
+        !['sandbox.payfast.co.za', 'www.payfast.co.za'].includes(checkoutUrl.hostname)
+      ) {
+        throw new Error('The payment server returned an invalid PayFast checkout URL.');
+      }
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = checkoutUrl.toString();
+      form.hidden = true;
+      Object.entries(checkout.fields).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = String(value);
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error) {
+      setPaymentError(error.message);
+      setPaymentStarting(false);
     }
   };
 
@@ -962,7 +1108,9 @@ export default function App() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-slate-200">{transaction.type} - {transaction.member}</span>
-                          <span className="rounded border border-slate-800 bg-slate-900 px-2 py-0.5 font-mono text-[10px] text-slate-400">Block #{transaction.block}</span>
+                          <span className="rounded border border-slate-800 bg-slate-900 px-2 py-0.5 font-mono text-[10px] text-slate-400">
+                            {transaction.block ? `Block #${transaction.block}` : 'Off-chain payment'}
+                          </span>
                         </div>
                         <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                           <span>Method: <strong>{transaction.method}</strong></span>
@@ -1031,6 +1179,56 @@ export default function App() {
         </section>
 
         <aside className="flex flex-col gap-6 lg:col-span-4">
+          <section className="rounded-2xl border border-cyan-800/50 bg-gradient-to-br from-slate-900 to-slate-950 p-5 shadow-xl">
+            <div className="mb-3 flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-cyan-400" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-white">Pay your contribution</h2>
+            </div>
+            <p className="mb-4 text-xs leading-relaxed text-slate-400">
+              Secure one-time ZAR checkout hosted by PayFast. Your payment is recorded only after PayFast confirms it.
+            </p>
+            <button
+              type="button"
+              onClick={handlePayContribution}
+              disabled={!payFastConfig?.enabled || paymentStarting}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-900/30 transition-all hover:from-cyan-500 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <CreditCard className="h-4 w-4" />
+              <span>
+                {paymentStarting
+                  ? 'Preparing secure checkout...'
+                  : payFastConfig?.enabled
+                    ? `Pay ${formatRand(Number(payFastConfig.amount))} with PayFast`
+                    : 'PayFast setup required'}
+              </span>
+            </button>
+            {payFastConfig?.sandbox && payFastConfig.enabled && (
+              <p className="mt-2 text-center text-[11px] font-medium text-amber-300">Sandbox mode — test payments only</p>
+            )}
+            {paymentStatus && (
+              <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950/70 p-3">
+                <p className="text-xs font-semibold capitalize text-slate-200">Payment {paymentStatus}</p>
+                {paymentMessage && <p className="mt-1 text-xs text-slate-400">{paymentMessage}</p>}
+                {paymentStatus === 'pending' && paymentReference && (
+                  <button
+                    type="button"
+                    onClick={() => checkPaymentStatus()}
+                    className="mt-2 text-xs font-semibold text-cyan-300 hover:text-cyan-200"
+                  >
+                    Refresh payment status
+                  </button>
+                )}
+              </div>
+            )}
+            {(paymentError || (!payFastConfig?.enabled && !paymentError)) && (
+              <p role={paymentError ? 'alert' : undefined} className="mt-3 text-xs text-amber-300">
+                {paymentError || 'Add PayFast merchant credentials to backend/.env to enable checkout.'}
+              </p>
+            )}
+            <p className="mt-3 text-[10px] leading-relaxed text-slate-500">
+              Payment confirmation is separate from transferring funds into the on-chain pool.
+            </p>
+          </section>
           <section className="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-5 shadow-2xl lg:sticky lg:top-24">
             <div className="mb-4 flex items-center justify-between border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2">
@@ -1115,7 +1313,7 @@ export default function App() {
             <span className="text-slate-400">Team Hack2go</span>
           </div>
         </div>
-        <p className="mx-auto mt-3 max-w-7xl text-[10px] text-slate-600">Interactive demonstration only. Wallet, deposits, and payouts shown here are simulated.</p>
+        <p className="mx-auto mt-3 max-w-7xl text-[10px] text-slate-600">Wallet, hardware deposits, and payouts are simulated. PayFast contributions are confirmed by the gateway and recorded off-chain.</p>
       </footer>
     </div>
   );
