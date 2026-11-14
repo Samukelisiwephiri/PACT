@@ -4,6 +4,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const express = require("express");
 const authRouter = require("./auth");
+const getPublicOrigin = require("./public-origin");
 
 const router = express.Router();
 const ordersFile = path.resolve(
@@ -163,7 +164,7 @@ router.post("/checkout", authRouter.requireAuthenticatedUser, async (req, res, n
       throw new PaymentError(503, "PayFast is not configured. Add your merchant credentials to backend/.env.");
     }
 
-    const frontendUrl = getBaseUrl(process.env.FRONTEND_URL, "http://localhost:5173");
+    const frontendUrl = getBaseUrl(getPublicOrigin(), "http://localhost:5173");
     const notifyBaseUrl = getBaseUrl(process.env.PAYFAST_NOTIFY_BASE_URL, frontendUrl);
     const reference = crypto.randomUUID();
     const groupName = typeof req.body?.groupName === "string"

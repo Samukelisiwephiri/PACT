@@ -11,6 +11,7 @@ import {
 } from './api';
 import {
   AlertCircle,
+  ArrowRight,
   ArrowUpRight,
   Award,
   Check,
@@ -23,6 +24,7 @@ import {
   Radio,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sliders,
   Sparkles,
   UserCheck,
@@ -42,7 +44,7 @@ const membersList = [
   { id: 7, name: 'Omphile Phiri', address: '0x88D...5566', status: 'Paid', amount: 2500, method: 'ESP32 Matrix PIN', time: '2 days ago', role: 'Member' },
   { id: 8, name: 'Halaletsang Malefahlo', address: '0x22F...4411', status: 'Paid', amount: 2500, method: 'NFC Tap-to-Pay', time: '3 days ago', role: 'Member' },
   { id: 9, name: 'Philasande Phiri', address: '0x55A...9900', status: 'Paid', amount: 2500, method: 'ESP32 Matrix PIN', time: '3 days ago', role: 'Member' },
-  { id: 10, name: 'Zanele Pillay', address: '0xAA1...44B3', status: 'Pending', amount: 2500, method: 'Awaiting Sweep', time: 'Pending', role: 'Member' }
+  { id: 10, name: 'Zanele Pillay', address: '0xAA1...44B3', status: 'Paid', amount: 2500, method: 'ESP32 Matrix PIN', time: 'Today', role: 'Member' }
 ];
 
 const initialTransactions = [
@@ -57,14 +59,20 @@ const initialGroup = {
   totalCycles: 12,
   contributionAmount: 2500,
   usdtRate: 18.5,
-  poolBalanceZar: 22500,
+  poolBalanceZar: 25000,
   targetZar: 25000,
-  nextPayoutRecipient: 'Samukelisiwe F. (You)',
-  nextPayoutDate: '2026-11-15',
+  nextPayoutRecipient: 'Samukelisiwe Phiri',
+  nextPayoutDate: '2026-11-30',
   payoutRules: 'Rotational (Strict Monthly 15th)'
 };
 
 const formatRand = (amount) => `R ${amount.toLocaleString()}`;
+const formatPayoutDate = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+  year: 'numeric'
+});
 const makeHash = (suffix) => `0x${Math.random().toString(16).slice(2, 10)}...${suffix}`;
 
 export default function App() {
@@ -86,6 +94,7 @@ export default function App() {
   const [paymentStatus, setPaymentStatus] = useState('');
   const [paymentMessage, setPaymentMessage] = useState('');
   const [paymentError, setPaymentError] = useState('');
+  const [isDemoCheckoutOpen, setIsDemoCheckoutOpen] = useState(false);
   const [selectedGroup] = useState('Soweto Green Savings Circle');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [walletConnected, setWalletConnected] = useState(true);
@@ -456,6 +465,12 @@ export default function App() {
   }, [isLoggedIn]);
 
   const handlePayContribution = async () => {
+    if (payFastConfig && !payFastConfig.enabled) {
+      setIsDemoCheckoutOpen(true);
+      return;
+    }
+    if (!payFastConfig?.enabled) return;
+
     setPaymentStarting(true);
     setPaymentError('');
     try {
@@ -484,6 +499,25 @@ export default function App() {
       setPaymentError(error.message);
       setPaymentStarting(false);
     }
+  };
+
+  const confirmDemoCheckout = () => {
+    const amount = Number(payFastConfig?.amount || 2500);
+    setTransactions((previous) => [{
+      hash: makeHash('demo'),
+      type: 'Deposit',
+      member: authUser?.name || 'PACT member',
+      amount: formatRand(amount),
+      method: 'PayFast ZAR Gateway',
+      status: 'Demo only',
+      block: null
+    }, ...previous]);
+    setPaymentReference('');
+    setPaymentStatus('demo');
+    setPaymentMessage(`${formatRand(amount)} demo checkout recorded locally. No charge was made.`);
+    setIsDemoCheckoutOpen(false);
+    setActiveTab('ledger');
+    showToast('Demo checkout added to the ledger. No payment was processed.', 'info');
   };
 
   const handleWalletToggle = () => {
@@ -561,6 +595,39 @@ export default function App() {
       }
       recordDeposit(method);
     }, 1200);
+  };
+
+  const simulateEdgeDeposit = () => {
+    if (isProcessingTx) return;
+    setIsProcessingTx(true);
+    setLcdLine1('PIN VERIFIED...');
+    setLcdLine2('KEYPAD / NFC DEMO');
+
+    window.setTimeout(() => {
+      setLcdLine1('SYNCING TO CHAIN...');
+      setLcdLine2('DEMO NETWORK SYNC');
+      window.setTimeout(() => {
+        const amount = groupData.contributionAmount;
+        setTransactions((previous) => [{
+          hash: makeHash('demo'),
+          type: 'Deposit',
+          member: authUser?.name || 'Samukelisiwe Phiri',
+          amount: formatRand(amount),
+          method: 'Simulated Keypad / NFC Tap',
+          status: 'Demo only',
+          block: null
+        }, ...previous]);
+        setLcdLine1('TX CONFIRMED!');
+        setLcdLine2(`${formatRand(amount)} - DEMO`);
+        setIsProcessingTx(false);
+        setActiveTab('ledger');
+        showToast('Demo hardware deposit added to the ledger. No funds were transferred.', 'info');
+        window.setTimeout(() => {
+          setLcdLine1('PACT NODE v2.4');
+          setLcdLine2('READY - ENTER PIN');
+        }, 2500);
+      }, 900);
+    }, 900);
   };
 
   const handleKeypadPress = (key) => {
@@ -885,6 +952,48 @@ export default function App() {
           </div>
         </div>
       )}
+      {isDemoCheckoutOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="demo-checkout-title"
+            className="w-full max-w-md rounded-2xl border border-cyan-800 bg-slate-900 p-6 shadow-2xl shadow-cyan-950/50"
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-800 bg-cyan-950 text-cyan-300">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 id="demo-checkout-title" className="text-lg font-bold text-white">Demo Sandbox Checkout</h2>
+                <p className="text-xs text-cyan-300">PayFast ZAR Gateway preview</p>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-slate-300">
+              Record a simulated {formatRand(Number(payFastConfig?.amount || 2500))} contribution in the ledger?
+            </p>
+            <p className="mt-3 rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-xs text-amber-200">
+              Demo only. No PayFast request is sent and no money is charged or transferred.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsDemoCheckoutOpen(false)}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDemoCheckout}
+                className="rounded-lg bg-gradient-to-r from-cyan-600 to-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:from-cyan-500 hover:to-emerald-500"
+              >
+                Confirm demo checkout
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-900/90 px-4 py-4 backdrop-blur-lg sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
@@ -896,6 +1005,13 @@ export default function App() {
                 <span className="rounded-full border border-cyan-500/30 bg-slate-800 px-2 py-0.5 font-mono text-xs text-cyan-400">Stokvel Web3</span>
               </div>
               <p className="text-xs text-slate-400">Peer-to-Peer Agreement &amp; Community Trust</p>
+              <div aria-label="How PACT protects your group" className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-cyan-900/80 bg-cyan-950/60 px-2 py-1 text-[9px] font-medium text-cyan-200 sm:text-[10px]">1. Tap Card / Enter PIN on ESP32</span>
+                <ArrowRight aria-hidden="true" className="h-3 w-3 text-slate-500" />
+                <span className="rounded-full border border-emerald-900/80 bg-emerald-950/50 px-2 py-1 text-[9px] font-medium text-emerald-200 sm:text-[10px]">2. Smart Contract Locks ZAR Escrow</span>
+                <ArrowRight aria-hidden="true" className="h-3 w-3 text-slate-500" />
+                <span className="rounded-full border border-violet-900/80 bg-violet-950/50 px-2 py-1 text-[9px] font-medium text-violet-200 sm:text-[10px]">3. Multi-Sig Automated Payout</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
@@ -933,6 +1049,36 @@ export default function App() {
 
       <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-6 p-4 md:p-6 lg:grid-cols-12">
         <section className="flex flex-col gap-6 lg:col-span-8">
+          <section aria-label="Trust and pool metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article className="rounded-xl border border-cyan-900/70 bg-gradient-to-br from-cyan-950/60 to-slate-900 p-4">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">
+                <Wallet className="h-4 w-4" />Total Escrow Pool
+              </div>
+              <p className="mt-3 font-mono text-2xl font-bold text-white">{formatRand(groupData.poolBalanceZar)}</p>
+              <p className="mt-1 text-[10px] text-slate-400">Locked in Smart Contract</p>
+            </article>
+            <article className="rounded-xl border border-emerald-900/70 bg-gradient-to-br from-emerald-950/50 to-slate-900 p-4">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                <CheckCircle2 className="h-4 w-4" />Cycle Contribution Rate
+              </div>
+              <p className="mt-3 font-mono text-xl font-bold text-white">{paidCount} / {members.length} Members Paid ({members.length ? Math.round((paidCount / members.length) * 100) : 0}%)</p>
+              <p className="mt-1 text-[10px] text-slate-400">Current contribution cycle</p>
+            </article>
+            <article className="rounded-xl border border-violet-900/70 bg-gradient-to-br from-violet-950/50 to-slate-900 p-4">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-violet-200">
+                <Clock className="h-4 w-4" />Next Payout Recipient
+              </div>
+              <p className="mt-3 truncate text-sm font-bold text-white">{groupData.nextPayoutRecipient}</p>
+              <p className="mt-1 text-xs text-violet-200">{formatPayoutDate(groupData.nextPayoutDate)}</p>
+            </article>
+            <article className="rounded-xl border border-amber-900/70 bg-gradient-to-br from-amber-950/40 to-slate-900 p-4">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                <ShieldCheck className="h-4 w-4" />Dispute / Fraud Tamper Alerts
+              </div>
+              <p className="mt-3 font-mono text-2xl font-bold text-white">0 Detected</p>
+              <p className="mt-1 text-[10px] text-amber-200">100% Hardware-Verified · Demo</p>
+            </article>
+          </section>
           <nav aria-label="Dashboard sections" className="flex gap-4 overflow-x-auto border-b border-slate-800 text-sm font-medium sm:gap-6">
             {[
               { id: 'dashboard', label: 'Group Overview', Icon: Users },
@@ -1014,7 +1160,7 @@ export default function App() {
                     </div>
                     <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                       <p className="mb-0.5 text-slate-400">Scheduled Payout Date</p>
-                      <p className="flex items-center gap-1.5 font-semibold text-emerald-300"><Clock className="h-3.5 w-3.5" />{groupData.nextPayoutDate}</p>
+                      <p className="flex items-center gap-1.5 font-semibold text-emerald-300"><Clock className="h-3.5 w-3.5" />{formatPayoutDate(groupData.nextPayoutDate)}</p>
                     </div>
                     <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                       <p className="mb-0.5 text-slate-400">Smart Contract Rule</p>
@@ -1121,7 +1267,11 @@ export default function App() {
                     </div>
                     <div className="flex w-full items-center justify-between gap-4 border-t border-slate-900 pt-2 md:w-auto md:border-0 md:pt-0">
                       <span className="font-mono text-sm font-bold text-slate-100">{transaction.amount}</span>
-                      <span className="flex items-center gap-1 rounded-full border border-emerald-800/50 bg-emerald-950/60 px-2.5 py-1 text-xs text-emerald-400"><Check className="h-3 w-3" />{transaction.status}</span>
+                      <span className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                        transaction.status === 'Demo only'
+                          ? 'border-amber-800/50 bg-amber-950/60 text-amber-300'
+                          : 'border-emerald-800/50 bg-emerald-950/60 text-emerald-400'
+                      }`}>{transaction.status === 'Demo only' ? <Sparkles className="h-3 w-3" /> : <Check className="h-3 w-3" />}{transaction.status}</span>
                     </div>
                   </article>
                 ))}
@@ -1185,12 +1335,14 @@ export default function App() {
               <h2 className="text-sm font-bold uppercase tracking-wider text-white">Pay your contribution</h2>
             </div>
             <p className="mb-4 text-xs leading-relaxed text-slate-400">
-              Secure one-time ZAR checkout hosted by PayFast. Your payment is recorded only after PayFast confirms it.
+              {payFastConfig?.enabled
+                ? 'Secure one-time ZAR checkout hosted by PayFast. Your payment is recorded only after PayFast confirms it.'
+                : 'Preview the PayFast ZAR checkout flow. The demo mode never sends a payment or charges money.'}
             </p>
             <button
               type="button"
               onClick={handlePayContribution}
-              disabled={!payFastConfig?.enabled || paymentStarting}
+              disabled={!payFastConfig || paymentStarting}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-900/30 transition-all hover:from-cyan-500 hover:to-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CreditCard className="h-4 w-4" />
@@ -1199,9 +1351,14 @@ export default function App() {
                   ? 'Preparing secure checkout...'
                   : payFastConfig?.enabled
                     ? `Pay ${formatRand(Number(payFastConfig.amount))} with PayFast`
-                    : 'PayFast setup required'}
+                    : payFastConfig
+                      ? `Pay ${formatRand(Number(payFastConfig.amount || 2500))} (PayFast Sandbox)`
+                      : 'Checking payment options...'}
               </span>
             </button>
+            {payFastConfig && !payFastConfig.enabled && (
+              <p className="mt-2 text-center text-[11px] font-medium text-amber-300">Demo Sandbox Checkout — no real payment will be made.</p>
+            )}
             {payFastConfig?.sandbox && payFastConfig.enabled && (
               <p className="mt-2 text-center text-[11px] font-medium text-amber-300">Sandbox mode — test payments only</p>
             )}
@@ -1220,9 +1377,9 @@ export default function App() {
                 )}
               </div>
             )}
-            {(paymentError || (!payFastConfig?.enabled && !paymentError)) && (
+            {paymentError && (
               <p role={paymentError ? 'alert' : undefined} className="mt-3 text-xs text-amber-300">
-                {paymentError || 'Add PayFast merchant credentials to backend/.env to enable checkout.'}
+                {paymentError}
               </p>
             )}
             <p className="mt-3 text-[10px] leading-relaxed text-slate-500">
@@ -1255,6 +1412,16 @@ export default function App() {
                   </div>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={simulateEdgeDeposit}
+                disabled={isProcessingTx}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/50 px-3 py-2.5 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-900/60 disabled:cursor-wait disabled:opacity-60"
+              >
+                <Radio className="h-4 w-4" />
+                <span>{isProcessingTx ? 'Simulating keypad / NFC tap...' : 'Simulate Keypad / NFC Tap'}</span>
+              </button>
+              <p className="text-center text-[10px] text-slate-500">Demo simulation only — no real hardware or funds involved.</p>
               <div className="space-y-3">
                 <p className="text-center text-[11px] font-semibold uppercase tracking-wider text-slate-400">Physical Entry Controls</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -1313,7 +1480,7 @@ export default function App() {
             <span className="text-slate-400">Team Hack2go</span>
           </div>
         </div>
-        <p className="mx-auto mt-3 max-w-7xl text-[10px] text-slate-600">Wallet, hardware deposits, and payouts are simulated. PayFast contributions are confirmed by the gateway and recorded off-chain.</p>
+        <p className="mx-auto mt-3 max-w-7xl text-[10px] text-slate-600">Wallet, hardware deposits, payouts, and credential-free PayFast demo checkouts are simulated; demo entries do not move funds. Configured PayFast payments are gateway-confirmed and recorded off-chain.</p>
       </footer>
     </div>
   );

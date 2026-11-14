@@ -51,3 +51,22 @@ The JSON account and payment stores are suitable for local development only. Bef
 deploying authentication or payment processing to Vercel or another serverless host,
 replace them with a shared persistent database; serverless filesystem and in-memory
 sessions are not durable across function instances.
+
+## Deploy to Vercel
+
+Import the repository into Vercel and set **Root Directory** to `PACT-main`. The
+included `vercel.json` installs both packages, builds the Vite frontend, and includes
+the built frontend in the Express function, so the website and `/api` endpoints deploy
+under the same origin. Vercel detects the root `server.js` entry point automatically.
+
+Set `FRONTEND_URL` to your public HTTPS app origin if you use a custom domain. If it is
+unset, the app uses Vercel's `VERCEL_URL`. For Google sign-in, set `GOOGLE_CLIENT_ID`
+and the build-time `VITE_GOOGLE_CLIENT_ID`. Add PayFast credentials and set
+`PAYFAST_NOTIFY_BASE_URL` to the same public origin if you enable payments. Never
+commit these values or private keys.
+
+**Important:** signup, sessions, and payment orders currently use local JSON files
+and in-memory sessions. Vercel functions do not provide durable writable storage or
+shared memory, so those features require a persistent database/session store before
+they can be relied on in a deployed app. The frontend and API can deploy together,
+but this storage limitation must be addressed for production authentication/payments.

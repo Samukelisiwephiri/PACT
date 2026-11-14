@@ -2,9 +2,10 @@ const express = require("express");
 const { ethers } = require("ethers");
 const cors = require("cors");
 require("dotenv").config();
+const getPublicOrigin = require("./public-origin");
 
 const app = express();
-const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const frontendOrigin = getPublicOrigin();
 if (process.env.PAYFAST_TRUST_PROXY === "true" || process.env.VERCEL === "1") {
   app.set("trust proxy", 1);
 }

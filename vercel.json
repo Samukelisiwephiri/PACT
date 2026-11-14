@@ -1,15 +1,10 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "backend/server.js",
-      "use": "@vercel/node"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm --prefix backend ci && npm --prefix frontend ci",
+  "buildCommand": "npm run build",
+  "functions": {
+    "server.js": {
+      "includeFiles": "frontend/dist/**"
     }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "backend/server.js"
-    }
-  ]
+  }
 }

@@ -3,12 +3,13 @@ const fs = require("fs/promises");
 const path = require("path");
 const { promisify } = require("util");
 const express = require("express");
+const getPublicOrigin = require("./public-origin");
 
 const scrypt = promisify(crypto.scrypt);
 const router = express.Router();
 const sessionCookieName = "pact_session";
 const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
-const frontendOrigin = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const frontendOrigin = getPublicOrigin();
 const usersFile = path.resolve(
   process.env.AUTH_USERS_FILE || path.join(__dirname, "data", "users.json")
 );
